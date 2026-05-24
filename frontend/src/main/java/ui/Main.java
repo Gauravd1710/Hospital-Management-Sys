@@ -1,133 +1,84 @@
-package ui;
 
+package ui;
 import javafx.animation.FadeTransition;
 import javafx.animation.ScaleTransition;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
-import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
-import javafx.scene.layout.Background;
-import javafx.scene.layout.BackgroundFill;
-import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.scene.paint.LinearGradient;
-import javafx.scene.paint.CycleMethod;
-import javafx.scene.paint.Stop;
 import javafx.scene.shape.Circle;
-import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import model.PatientDTO;
+import service.ApiService;
+import ui.Main.PatientCell;
 import ui.views.PatientsView;
 import ui.views.ReportsView;
 
 // ===================== BACKEND =====================
 
-abstract class Patient {
-    String id, name, diagnosis;
-
-    public Patient(String id, String name, String diagnosis) {
-        this.id = id; this.name = name; this.diagnosis = diagnosis;
-    }
-
-    public String getId()        { return id; }
-    public String getName()      { return name; }
-    public String getDiagnosis() { return diagnosis; }
-
-    public abstract String getDetails();
-    public abstract String getType();
-}
-
-class Beds extends Patient {
-    String roomNumber;
-    public Beds(String id, String name, String diagnosis, String roomNumber) {
-        super(id, name, diagnosis);
-        this.roomNumber = roomNumber;
-    }
-    @Override public String getDetails() { return "Room " + roomNumber; }
-    @Override public String getType()    { return "BED"; }
-}
-
-class Appointment extends Patient {
-    String appointmentDate;
-    public Appointment(String id, String name, String diagnosis, String appointmentDate) {
-        super(id, name, diagnosis);
-        this.appointmentDate = appointmentDate;
-    }
-    @Override public String getDetails() { return appointmentDate; }
-    @Override public String getType()    { return "APPT"; }
-}
-
-class Hospital {
-    ObservableList<Patient> patientList = FXCollections.observableArrayList();
-    public void addPatient(Patient p)            { patientList.add(p); }
-    public ObservableList<Patient> getPatients() { return patientList; }
-}
 
 // ===================== FRONTEND =====================
 
 public class Main extends Application {
-
-    Hospital hospital     = new Hospital();
-    int totalBeds         = 0;
-    int totalAppointments = 0;
+    private ObservableList<PatientDTO> patientList = FXCollections.observableArrayList();
+    private FilteredList<PatientDTO> filteredPatients = new FilteredList<>(patientList, p -> true);
+    private boolean editingMode = false;
+    private long editingPatientId = -1;
 
     Label bedCountLabel;
     Label apptCountLabel;
     Label totalCountLabel;
 
-    private StackPane contentArea;
+    TextField idField;
+    TextField nameField;
+    TextField diagnosisField;
+    TextField extraField;
+    private TextField searchField;
 
-    // ── Palette (unchanged from original) ─────────────────────────────────
-    private static final String C_PAGE_BG     = "#F0F4F8";
-    private static final String C_WHITE       = "#FFFFFF";
-    private static final String C_BLUE        = "#2B7FD4";
-    private static final String C_BLUE_DARK   = "#1B5FA8";
-    private static final String C_BLUE_LIGHT  = "#EBF4FF";
-    private static final String C_TEAL        = "#0F9D8A";
-    private static final String C_TEAL_LIGHT  = "#E1F5F2";
-    private static final String C_GREEN       = "#1DB87A";
-    private static final String C_GREEN_LIGHT = "#E6F9F1";
-    private static final String C_RED         = "#E24B4A";
-    private static final String C_RED_LIGHT   = "#FCEBEB";
-    private static final String C_TEXT_DARK   = "#1A2332";
-    private static final String C_TEXT_MED    = "#4A5568";
-    private static final String C_TEXT_LIGHT  = "#718096";
-    private static final String C_BORDER      = "#E2E8F0";
+    ToggleButton bedBtn;
+    ToggleButton apptBtn;
+
+    Button addBtn;
+
+    private StackPane contentArea;
 
     @Override
     public void start(Stage stage) {
-
         VBox root = new VBox();
-        root.setStyle("-fx-background-color: " + C_PAGE_BG + ";");
+        root.setStyle("-fx-background-color: " + AppTheme.C_PAGE_BG + ";");
 
         contentArea = new StackPane();
         contentArea.getChildren().add(buildBody());
+        loadPatientsFromDatabase();
         VBox.setVgrow(contentArea, Priority.ALWAYS);
 
         root.getChildren().addAll(buildHeader(), contentArea);
 
-        Scene scene = new Scene(root, 1200, 760);
-        stage.setTitle("MediCare — Hospital Management System");
+        Scene scene = new Scene(root, 1240, 780);
+        stage.setTitle("NexaCare — Smart Hospital Management");
         stage.setScene(scene);
-        stage.setMinWidth(1050);
+        stage.setMinWidth(1060);
         stage.setMinHeight(680);
         stage.show();
     }
@@ -135,47 +86,28 @@ public class Main extends Application {
     // ===================== HEADER =====================
 
     private HBox buildHeader() {
-
         HBox header = new HBox();
-        header.setPadding(new Insets(0, 28, 0, 24));
+        header.setPadding(new Insets(0, 28, 0, 22));
         header.setAlignment(Pos.CENTER_LEFT);
-        header.setPrefHeight(64);
+        header.setPrefHeight(66);
         header.setStyle(
-            "-fx-background-color: " + C_WHITE + ";" +
-            "-fx-border-color: " + C_BORDER + ";" +
+            "-fx-background-color: " + AppTheme.C_WHITE + ";" +
+            "-fx-border-color: " + AppTheme.C_BORDER + ";" +
             "-fx-border-width: 0 0 1 0;" +
-            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.06), 8, 0, 0, 2);"
+            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.07), 10, 0, 0, 2);"
         );
 
-        // ── Logo: cross inside rounded square, drawn with JavaFX shapes ──
-        StackPane logoMark = buildLogoMark();
+        HBox logoGroup = AppTheme.buildLogoGroup(false);
 
-        // Brand text stacked: "MediCare" bold + "Hospital Management" small
-        VBox brandStack = new VBox(0);
-        brandStack.setAlignment(Pos.CENTER_LEFT);
-        brandStack.setPadding(new Insets(0, 0, 0, 10));
-
-        Label brandName = new Label("MediCare");
-        brandName.setFont(Font.font("Georgia", FontWeight.BOLD, 17));
-        brandName.setTextFill(Color.web(C_TEXT_DARK));
-
-        Label brandSub = new Label("Hospital Management");
-        brandSub.setFont(Font.font("Arial", 10));
-        brandSub.setTextFill(Color.web(C_TEXT_LIGHT));
-
-        brandStack.getChildren().addAll(brandName, brandSub);
-
-        // ── Vertical divider ────────────────────────────────────────────
+        // Thin vertical divider
         Region vDiv = new Region();
-        vDiv.setPrefSize(1, 28);
-        vDiv.setMinSize(1, 28);
-        vDiv.setMaxSize(1, 28);
-        vDiv.setStyle("-fx-background-color: " + C_BORDER + ";");
+        vDiv.setPrefSize(1, 30); vDiv.setMinSize(1, 30); vDiv.setMaxSize(1, 30);
+        vDiv.setStyle("-fx-background-color: " + AppTheme.C_BORDER + ";");
         HBox divWrap = new HBox(vDiv);
         divWrap.setAlignment(Pos.CENTER);
-        divWrap.setPadding(new Insets(0, 20, 0, 18));
+        divWrap.setPadding(new Insets(0, 22, 0, 20));
 
-        // ── Nav pills ───────────────────────────────────────────────────
+        // Nav pills
         Label navDashboard = navPill("Dashboard", true);
         Label navPatients  = navPill("Patients",  false);
         Label navReports   = navPill("Reports",   false);
@@ -193,113 +125,71 @@ public class Main extends Application {
             contentArea.getChildren().setAll(ReportsView.getView());
         });
 
-        HBox navRow = new HBox(4, navDashboard, navPatients, navReports);
+        HBox navRow = new HBox(6, navDashboard, navPatients, navReports);
         navRow.setAlignment(Pos.CENTER_LEFT);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // ── User area ───────────────────────────────────────────────────
-        // Status dot
-        StackPane statusDot = new StackPane();
-        statusDot.setPrefSize(8, 8);
-        statusDot.setMinSize(8, 8);
-        statusDot.setStyle("-fx-background-color: " + C_GREEN + "; -fx-background-radius: 4;");
-
-        Label statusLbl = new Label("Online");
-        statusLbl.setFont(Font.font("Arial", 11));
-        statusLbl.setTextFill(Color.web(C_GREEN));
-
-        HBox statusBadge = new HBox(5, statusDot, statusLbl);
+        // Status badge
+        StackPane dot = new StackPane();
+        dot.setPrefSize(7, 7); dot.setMinSize(7, 7);
+        dot.setStyle("-fx-background-color: " + AppTheme.C_GREEN + "; -fx-background-radius: 4;");
+        Label statusLbl = new Label("System Online");
+        statusLbl.setFont(Font.font("Arial", FontWeight.BOLD, 11));
+        statusLbl.setTextFill(Color.web(AppTheme.C_GREEN));
+        HBox statusBadge = new HBox(6, dot, statusLbl);
         statusBadge.setAlignment(Pos.CENTER);
-        statusBadge.setPadding(new Insets(4, 10, 4, 10));
+        statusBadge.setPadding(new Insets(5, 12, 5, 12));
         statusBadge.setStyle(
-            "-fx-background-color: " + C_GREEN_LIGHT + ";" +
-            "-fx-background-radius: 12;"
+            "-fx-background-color: " + AppTheme.C_GREEN_LIGHT + ";" +
+            "-fx-background-radius: 14;"
         );
 
-        // Avatar
+        // User pill
         StackPane avatar = new StackPane();
-        avatar.setPrefSize(36, 36);
-        avatar.setMinSize(36, 36);
+        avatar.setPrefSize(34, 34); avatar.setMinSize(34, 34);
         avatar.setStyle(
-            "-fx-background-color: " + C_TEAL_LIGHT + ";" +
-            "-fx-background-radius: 18;" +
-            "-fx-border-color: " + C_TEAL + ";" +
-            "-fx-border-radius: 18;" +
-            "-fx-border-width: 1.5;"
+            "-fx-background-color: " + AppTheme.C_BLUE_LIGHT + ";" +
+            "-fx-background-radius: 17;" +
+            "-fx-border-color: " + AppTheme.C_BLUE + ";" +
+            "-fx-border-radius: 17; -fx-border-width: 1.5;"
         );
         Label avLbl = new Label("DA");
         avLbl.setFont(Font.font("Arial", FontWeight.BOLD, 11));
-        avLbl.setTextFill(Color.web(C_TEAL));
+        avLbl.setTextFill(Color.web(AppTheme.C_BLUE));
         avatar.getChildren().add(avLbl);
 
         VBox userInfo = new VBox(1);
         Label userName = new Label("Dr. Admin");
         userName.setFont(Font.font("Arial", FontWeight.BOLD, 13));
-        userName.setTextFill(Color.web(C_TEXT_DARK));
+        userName.setTextFill(Color.web(AppTheme.C_TEXT_DARK));
         Label userRole = new Label("Administrator");
         userRole.setFont(Font.font("Arial", 10));
-        userRole.setTextFill(Color.web(C_TEXT_LIGHT));
+        userRole.setTextFill(Color.web(AppTheme.C_TEXT_LIGHT));
         userInfo.getChildren().addAll(userName, userRole);
 
-        HBox userBox = new HBox(10, avatar, userInfo);
+        HBox userBox = new HBox(9, avatar, userInfo);
         userBox.setAlignment(Pos.CENTER_LEFT);
-        userBox.setPadding(new Insets(0, 0, 0, 16));
+        userBox.setPadding(new Insets(0, 0, 0, 18));
 
-        header.getChildren().addAll(
-            logoMark, brandStack, divWrap,
-            navRow, spacer,
-            statusBadge, userBox
-        );
-
+        header.getChildren().addAll(logoGroup, divWrap, navRow, spacer, statusBadge, userBox);
         return header;
-    }
-
-    /** Builds a clean logo mark: gradient rounded square with a "+" cross made of two Rectangles. */
-    private StackPane buildLogoMark() {
-
-        StackPane mark = new StackPane();
-        mark.setPrefSize(40, 40);
-        mark.setMinSize(40, 40);
-
-        // Gradient background square
-        Rectangle bg = new Rectangle(40, 40);
-        bg.setArcWidth(12); bg.setArcHeight(12);
-        bg.setFill(new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
-            new Stop(0, Color.web("#4A9FE8")),
-            new Stop(1, Color.web(C_BLUE_DARK))
-        ));
-
-        // Horizontal bar of the cross
-        Rectangle hBar = new Rectangle(18, 4);
-        hBar.setArcWidth(3); hBar.setArcHeight(3);
-        hBar.setFill(Color.WHITE);
-
-        // Vertical bar of the cross
-        Rectangle vBar = new Rectangle(4, 18);
-        vBar.setArcWidth(3); vBar.setArcHeight(3);
-        vBar.setFill(Color.WHITE);
-
-        mark.getChildren().addAll(bg, hBar, vBar);
-        return mark;
     }
 
     private void setActiveNav(Label active, Label... inactives) {
         active.setFont(Font.font("Arial", FontWeight.BOLD, 13));
-        active.setTextFill(Color.web(C_BLUE));
+        active.setTextFill(Color.web(AppTheme.C_BLUE));
         active.setStyle(
-            "-fx-background-color: " + C_BLUE_LIGHT + ";" +
-            "-fx-background-radius: 20;" +
-            "-fx-cursor: hand;"
+            "-fx-background-color: " + AppTheme.C_BLUE_LIGHT + ";" +
+            "-fx-background-radius: 20; -fx-cursor: hand;"
         );
         for (Label l : inactives) {
             l.setFont(Font.font("Arial", FontWeight.NORMAL, 13));
-            l.setTextFill(Color.web(C_TEXT_MED));
+            l.setTextFill(Color.web(AppTheme.C_TEXT_MED));
             l.setStyle(
                 "-fx-background-color: transparent;" +
-                "-fx-background-radius: 20;" +
-                "-fx-cursor: hand;"
+                "-fx-background-radius: 20; -fx-cursor: hand;"
             );
         }
     }
@@ -307,33 +197,83 @@ public class Main extends Application {
     private Label navPill(String text, boolean active) {
         Label lbl = new Label(text);
         lbl.setFont(Font.font("Arial", active ? FontWeight.BOLD : FontWeight.NORMAL, 13));
-        lbl.setPadding(new Insets(7, 16, 7, 16));
-        lbl.setTextFill(Color.web(active ? C_BLUE : C_TEXT_MED));
+        lbl.setPadding(new Insets(7, 18, 7, 18));
+        lbl.setTextFill(Color.web(active ? AppTheme.C_BLUE : AppTheme.C_TEXT_MED));
         lbl.setStyle(
-            "-fx-background-color: " + (active ? C_BLUE_LIGHT : "transparent") + ";" +
-            "-fx-background-radius: 20;" +
-            "-fx-cursor: hand;"
+            "-fx-background-color: " + (active ? AppTheme.C_BLUE_LIGHT : "transparent") + ";" +
+            "-fx-background-radius: 20; -fx-cursor: hand;"
         );
         lbl.setOnMouseEntered(e -> {
-            if (!lbl.getTextFill().equals(Color.web(C_BLUE)))
-                lbl.setStyle("-fx-background-color: " + C_BLUE_LIGHT + "; -fx-background-radius: 20; -fx-cursor: hand;");
+            if (!lbl.getTextFill().equals(Color.web(AppTheme.C_BLUE)))
+                lbl.setStyle("-fx-background-color: " + AppTheme.C_BLUE_LIGHT +
+                             "; -fx-background-radius: 20; -fx-cursor: hand;");
         });
         lbl.setOnMouseExited(e -> {
-            if (!lbl.getTextFill().equals(Color.web(C_BLUE)))
-                lbl.setStyle("-fx-background-color: transparent; -fx-background-radius: 20; -fx-cursor: hand;");
+            if (!lbl.getTextFill().equals(Color.web(AppTheme.C_BLUE)))
+                lbl.setStyle("-fx-background-color: transparent;" +
+                             "-fx-background-radius: 20; -fx-cursor: hand;");
         });
         return lbl;
     }
 
     // ===================== BODY =====================
 
+    private void loadPatientsFromDatabase() {
+
+        patientList.clear();
+
+        try {
+
+            patientList.addAll(
+                    ApiService.getAllPatients()
+            );
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+
+            Alert alert =
+                    new Alert(Alert.AlertType.ERROR);
+
+            alert.setTitle("Database Error");
+            alert.setHeaderText(null);
+            alert.setContentText(
+                    "Failed to load patients from database!"
+            );
+
+            alert.showAndWait();
+        }
+
+        long bedCount =
+                patientList.stream()
+                        .filter(patient ->
+                                "BED".equals(patient.getType()))
+                        .count();
+
+        long appointmentCount =
+                patientList.stream()
+                        .filter(patient ->
+                                "APPOINTMENT".equals(patient.getType()))
+                        .count();
+
+        totalCountLabel.setText(
+                String.valueOf(patientList.size())
+        );
+
+        bedCountLabel.setText(
+                String.valueOf(bedCount)
+        );
+
+        apptCountLabel.setText(
+                String.valueOf(appointmentCount)
+        );
+    }
+
     private HBox buildBody() {
         HBox body = new HBox(24);
         body.setPadding(new Insets(26, 28, 26, 28));
-
         VBox leftCol  = buildLeftColumn();
         VBox rightCol = buildRightColumn();
-
         leftCol.setMinWidth(320);
         leftCol.setMaxWidth(340);
         HBox.setHgrow(rightCol, Priority.ALWAYS);
@@ -344,106 +284,164 @@ public class Main extends Application {
     // ===================== LEFT COLUMN =====================
 
     private VBox buildLeftColumn() {
-
         VBox col = new VBox(0);
-
         VBox formCard = card();
 
-        // ── Card header ──────────────────────────────────────────────────
         HBox cardHeader = new HBox(10);
         cardHeader.setAlignment(Pos.CENTER_LEFT);
-        cardHeader.setPadding(new Insets(0, 0, 16, 0));
+        cardHeader.setPadding(new Insets(0, 0, 14, 0));
 
-        // Small blue dot accent
-        StackPane dot = new StackPane();
-        dot.setPrefSize(10, 10);
-        dot.setMinSize(10, 10);
-        dot.setStyle("-fx-background-color: " + C_BLUE + "; -fx-background-radius: 5;");
+        Circle dot = new Circle(5, Color.web(AppTheme.C_TEAL));
 
-        VBox headerText = new VBox(1);
+        VBox headerText = new VBox(2);
         Label cardTitle = new Label("Add New Patient");
         cardTitle.setFont(Font.font("Georgia", FontWeight.BOLD, 16));
-        cardTitle.setTextFill(Color.web(C_TEXT_DARK));
+        cardTitle.setTextFill(Color.web(AppTheme.C_TEXT_DARK));
         Label cardSub = new Label("Fill in the details below to register");
         cardSub.setFont(Font.font("Arial", 11));
-        cardSub.setTextFill(Color.web(C_TEXT_LIGHT));
+        cardSub.setTextFill(Color.web(AppTheme.C_TEXT_LIGHT));
         headerText.getChildren().addAll(cardTitle, cardSub);
-
         cardHeader.getChildren().addAll(dot, headerText);
 
-        // ── Type selector ────────────────────────────────────────────────
         ToggleGroup typeGroup = new ToggleGroup();
-        ToggleButton bedBtn  = typeToggle("Bed Patient", typeGroup, true);
-        ToggleButton apptBtn = typeToggle("Appointment", typeGroup, false);
-
+        bedBtn  = typeToggle("Bed Patient", typeGroup, true);
+        apptBtn = typeToggle("Appointment", typeGroup, false);
         HBox typeRow = new HBox(8, bedBtn, apptBtn);
 
-        // ── Fields ───────────────────────────────────────────────────────
-        TextField idField        = styledField("Patient ID  e.g. P-001");
-        TextField nameField      = styledField("Full Name  e.g. Rahul Sharma");
-        TextField diagnosisField = styledField("Diagnosis  e.g. Hypertension");
-        TextField extraField     = styledField("Room No.  e.g. 204");
+        idField        = styledField("Patient ID  e.g. P-001");
+        nameField      = styledField("Full Name  e.g. Rahul Sharma");
+        diagnosisField = styledField("Diagnosis  e.g. Hypertension");
+        extraField     = styledField("Room No.  e.g. 204");
 
         typeGroup.selectedToggleProperty().addListener((obs, old, nw) -> {
             if (nw == bedBtn) extraField.setPromptText("Room No.  e.g. 204");
             else              extraField.setPromptText("Date  e.g. 2026-06-01");
         });
 
-        // ── Buttons ───────────────────────────────────────────────────────
-        Button addBtn   = primaryButton("Add Patient");
+        addBtn   = primaryButton("Add Patient");
         Button clearBtn = dangerButton("Clear All Records");
 
         Label statusLabel = new Label();
         statusLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
         statusLabel.setWrapText(true);
 
-        addBtn.setOnAction(e -> {
-            String id   = idField.getText().trim();
-            String name = nameField.getText().trim();
-            String diag = diagnosisField.getText().trim();
-            String xtra = extraField.getText().trim();
+       addBtn.setOnAction(e -> {
 
-            if (id.isEmpty() || name.isEmpty() || diag.isEmpty() || xtra.isEmpty()) {
-                showInlineStatus(statusLabel, "Please fill in all fields.", false);
-                shakeButton(addBtn);
+            String patientId = idField.getText().trim();
+            String name = nameField.getText().trim();
+            String diagnosis = diagnosisField.getText().trim();
+            String details = extraField.getText().trim();
+
+            if (patientId.isEmpty() ||
+                name.isEmpty() ||
+                diagnosis.isEmpty() ||
+                details.isEmpty()) {
+
+                Alert alert =
+                        new Alert(Alert.AlertType.WARNING);
+
+                alert.setTitle("Validation Error");
+                alert.setHeaderText(null);
+                alert.setContentText(
+                        "Please fill all fields.");
+
+                alert.showAndWait();
+
                 return;
             }
 
-            Patient patient;
-            if (typeGroup.getSelectedToggle() == bedBtn) {
-                patient = new Beds(id, name, diag, xtra);
-                totalBeds++;
-                bedCountLabel.setText(String.valueOf(totalBeds));
+            String type;
+
+            if (bedBtn.isSelected()) {
+                type = "BED";
             } else {
-                patient = new Appointment(id, name, diag, xtra);
-                totalAppointments++;
-                apptCountLabel.setText(String.valueOf(totalAppointments));
+                type = "APPOINTMENT";
             }
 
-            hospital.addPatient(patient);
-            totalCountLabel.setText(String.valueOf(hospital.getPatients().size()));
-            idField.clear(); nameField.clear();
-            diagnosisField.clear(); extraField.clear();
-            showInlineStatus(statusLabel, "Patient added successfully.", true);
-            pulseButton(addBtn);
+            PatientDTO patient =
+                    new PatientDTO(
+                            patientId,
+                            name,
+                            diagnosis,
+                            type,
+                            details
+                    );
+
+            
+
+            boolean success;
+
+            if (editingMode) {
+
+                success =
+                        ApiService.updatePatient(
+                                editingPatientId,
+                                patient
+                        );
+
+            } else {
+
+                success =
+                        ApiService.savePatient(patient);
+            }
+
+            if (success) {
+
+                loadPatientsFromDatabase();
+
+                Alert alert =
+                        new Alert(Alert.AlertType.INFORMATION);
+
+                alert.setTitle("Success");
+                alert.setHeaderText(null);
+                alert.setContentText(
+                        editingMode
+                                ? "Patient updated successfully!"
+                                : "Patient added successfully!");
+
+                alert.showAndWait();
+
+                idField.clear();
+                nameField.clear();
+                diagnosisField.clear();
+                extraField.clear();
+
+                editingMode = false;
+                editingPatientId = -1;
+                addBtn.setText("+ Add Patient");
+
+            } else {
+
+                Alert alert =
+                        new Alert(Alert.AlertType.ERROR);
+
+                alert.setTitle("Error");
+                alert.setHeaderText(null);
+                alert.setContentText(
+                        "Failed to save patient!");
+
+                alert.showAndWait();
+            }
         });
 
         clearBtn.setOnAction(e -> {
-            hospital.getPatients().clear();
-            totalBeds = 0; totalAppointments = 0;
+            patientList.clear();
             bedCountLabel.setText("0");
             apptCountLabel.setText("0");
             totalCountLabel.setText("0");
+            editingMode = false;
+            editingPatientId = -1;
+            addBtn.setText("+ Add Patient");
             showInlineStatus(statusLabel, "All records cleared.", true);
         });
 
         formCard.getChildren().addAll(
             cardHeader,
-            sectionLabel("PATIENT TYPE"),   typeRow,
+            sectionLabel("PATIENT TYPE"),       typeRow,
             thinDivider(),
-            sectionLabel("IDENTIFICATION"), idField, nameField,
+            sectionLabel("IDENTIFICATION"),     idField, nameField,
             thinDivider(),
-            sectionLabel("MEDICAL INFO"),   diagnosisField,
+            sectionLabel("MEDICAL INFO"),       diagnosisField,
             thinDivider(),
             sectionLabel("ROOM / APPOINTMENT"), extraField,
             thinDivider(),
@@ -458,7 +456,6 @@ public class Main extends Application {
     // ===================== RIGHT COLUMN =====================
 
     private VBox buildRightColumn() {
-
         VBox col = new VBox(20);
 
         totalCountLabel = new Label("0");
@@ -466,135 +463,212 @@ public class Main extends Application {
         apptCountLabel  = new Label("0");
 
         HBox statsRow = new HBox(16,
-            statCard("Total Patients",  totalCountLabel, C_BLUE,  C_BLUE_LIGHT,  "P"),
-            statCard("Admitted (Beds)", bedCountLabel,   C_TEAL,  C_TEAL_LIGHT,  "B"),
-            statCard("Appointments",    apptCountLabel,  C_GREEN, C_GREEN_LIGHT, "A")
+            statCard("Total Patients",  totalCountLabel, AppTheme.C_BLUE,  AppTheme.C_BLUE_LIGHT,  "P"),
+            statCard("Admitted (Beds)", bedCountLabel,   AppTheme.C_TEAL,  AppTheme.C_TEAL_LIGHT,  "B"),
+            statCard("Appointments",    apptCountLabel,  AppTheme.C_GREEN, AppTheme.C_GREEN_LIGHT, "A")
         );
 
-        // ── Records card ─────────────────────────────────────────────────
         VBox recordsCard = card();
 
         HBox titleRow = new HBox(10);
         titleRow.setAlignment(Pos.CENTER_LEFT);
-        titleRow.setPadding(new Insets(0, 0, 14, 0));
+        titleRow.setPadding(new Insets(0, 0, 12, 0));
 
-        // Accent bar
         Region accentBar = new Region();
-        accentBar.setPrefSize(4, 22);
-        accentBar.setMinSize(4, 22);
-        accentBar.setStyle("-fx-background-color: " + C_BLUE + "; -fx-background-radius: 2;");
+        accentBar.setPrefSize(4, 22); accentBar.setMinSize(4, 22);
+        accentBar.setStyle("-fx-background-color: " + AppTheme.C_BLUE + "; -fx-background-radius: 2;");
 
         Label title = new Label("Patient Records");
         title.setFont(Font.font("Georgia", FontWeight.BOLD, 17));
-        title.setTextFill(Color.web(C_TEXT_DARK));
-
+        title.setTextFill(Color.web(AppTheme.C_TEXT_DARK));
         titleRow.getChildren().addAll(accentBar, title);
 
-        ListView<Patient> listView = new ListView<>(hospital.getPatients());
+        searchField = new TextField();
+        searchField.setPromptText("Search patients...");
+        searchField.setStyle(
+            "-fx-background-radius: 12;" +
+            "-fx-padding: 10;" +
+            "-fx-font-size: 14;" +
+            "-fx-background-color: #F3F6FA;" +
+            "-fx-border-color: #D6DFEA;" +
+            "-fx-text-fill: 1E293B;" +
+            "-fx-prompt-text-fill: #94A3B8;"
+        );
+        searchField.textProperty().addListener((obs, oldValue, newValue) -> {
+            filteredPatients.setPredicate(patient -> {
+                if (newValue == null || newValue.isEmpty()) {
+                    return true;
+                }
+
+                String search = newValue.toLowerCase();
+
+                return patient.getPatientId().toLowerCase().contains(search)
+                        || patient.getName().toLowerCase().contains(search)
+                        || patient.getDiagnosis().toLowerCase().contains(search);
+            });
+        });
+
+        ListView<PatientDTO> listView = new ListView<>(filteredPatients);
         listView.setStyle(
             "-fx-background-color: transparent;" +
             "-fx-border-color: transparent;"
         );
-        listView.setFixedCellSize(72);
+        listView.setPlaceholder(
+        new Label("No patients found in database.")
+        );
+
+        listView.setFixedCellSize(76);
         VBox.setVgrow(listView, Priority.ALWAYS);
         listView.setCellFactory(lv -> new PatientCell());
 
-        recordsCard.getChildren().addAll(titleRow, listView);
+        recordsCard.getChildren().addAll(titleRow, searchField, listView);
         VBox.setVgrow(recordsCard, Priority.ALWAYS);
 
         col.getChildren().addAll(statsRow, recordsCard);
         VBox.setVgrow(col, Priority.ALWAYS);
-
         return col;
     }
 
     // ===================== LIST CELL =====================
 
-    class PatientCell extends ListCell<Patient> {
-
+    class PatientCell extends ListCell<PatientDTO> {
         @Override
-        protected void updateItem(Patient p, boolean empty) {
+        protected void updateItem(PatientDTO p, boolean empty) {
             super.updateItem(p, empty);
             setStyle("-fx-background-color: transparent; -fx-padding: 0;");
-
             if (empty || p == null) {
                 setText(null); setGraphic(null);
             } else {
-                boolean isBed = p instanceof Beds;
+                boolean isBed  = p.getType().equals("BED");
+                String accent  = isBed ? AppTheme.C_TEAL  : AppTheme.C_BLUE;
+                String bgCol   = isBed ? AppTheme.C_TEAL_LIGHT : AppTheme.C_BLUE_LIGHT;
 
                 HBox row = new HBox(14);
                 row.setAlignment(Pos.CENTER_LEFT);
                 row.setPadding(new Insets(10, 14, 10, 14));
                 row.setStyle(
-                    "-fx-background-color: " + C_WHITE + ";" +
+                    "-fx-background-color: " + AppTheme.C_WHITE + ";" +
                     "-fx-background-radius: 12;" +
-                    "-fx-border-color: " + C_BORDER + ";" +
+                    "-fx-border-color: " + AppTheme.C_BORDER + ";" +
                     "-fx-border-radius: 12;" +
                     "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 6, 0, 0, 2);"
                 );
 
-                // Left coloured stripe
                 Region stripe = new Region();
-                stripe.setPrefSize(4, 40);
-                stripe.setMinSize(4, 40);
-                stripe.setStyle(
-                    "-fx-background-color: " + (isBed ? C_TEAL : C_BLUE) + ";" +
-                    "-fx-background-radius: 2;"
-                );
+                stripe.setPrefSize(4, 42); stripe.setMinSize(4, 42);
+                stripe.setStyle("-fx-background-color: " + accent + "; -fx-background-radius: 2;");
 
-                // Avatar circle with first-letter initial
-                StackPane avatarCircle = new StackPane();
-                avatarCircle.setPrefSize(42, 42);
-                avatarCircle.setMinSize(42, 42);
-                avatarCircle.setStyle(
-                    "-fx-background-color: " + (isBed ? C_TEAL_LIGHT : C_BLUE_LIGHT) + ";" +
+                StackPane avatar = new StackPane();
+                avatar.setPrefSize(42, 42); avatar.setMinSize(42, 42);
+                avatar.setStyle(
+                    "-fx-background-color: " + bgCol + ";" +
                     "-fx-background-radius: 21;" +
-                    "-fx-border-color: " + (isBed ? C_TEAL : C_BLUE) + ";" +
-                    "-fx-border-radius: 21;" +
-                    "-fx-border-width: 1.5;"
+                    "-fx-border-color: " + accent + ";" +
+                    "-fx-border-radius: 21; -fx-border-width: 1.5;"
                 );
                 Label initLbl = new Label(String.valueOf(p.getName().charAt(0)).toUpperCase());
                 initLbl.setFont(Font.font("Georgia", FontWeight.BOLD, 17));
-                initLbl.setTextFill(Color.web(isBed ? C_TEAL : C_BLUE));
-                avatarCircle.getChildren().add(initLbl);
+                initLbl.setTextFill(Color.web(accent));
+                avatar.getChildren().add(initLbl);
 
-                // Info block
                 VBox info = new VBox(3);
-
                 HBox nameRow = new HBox(8);
                 nameRow.setAlignment(Pos.CENTER_LEFT);
 
                 Label nameLbl = new Label(p.getName());
                 nameLbl.setFont(Font.font("Arial", FontWeight.BOLD, 14));
-                nameLbl.setTextFill(Color.web(C_TEXT_DARK));
+                nameLbl.setTextFill(Color.web(AppTheme.C_TEXT_DARK));
 
-                // Badge
                 Label badge = new Label(p.getType());
                 badge.setFont(Font.font("Arial", FontWeight.BOLD, 9));
-                badge.setPadding(new Insets(2, 7, 2, 7));
-                badge.setTextFill(Color.web(isBed ? C_TEAL : C_BLUE));
+                badge.setPadding(new Insets(2, 8, 2, 8));
+                badge.setTextFill(Color.web(accent));
                 badge.setStyle(
-                    "-fx-background-color: " + (isBed ? C_TEAL_LIGHT : C_BLUE_LIGHT) + ";" +
+                    "-fx-background-color: " + bgCol + ";" +
                     "-fx-background-radius: 8;" +
-                    "-fx-border-color: " + (isBed ? C_TEAL : C_BLUE) + ";" +
-                    "-fx-border-radius: 8;" +
-                    "-fx-border-width: 1;"
+                    "-fx-border-color: " + accent + ";" +
+                    "-fx-border-radius: 8; -fx-border-width: 1;"
                 );
                 nameRow.getChildren().addAll(nameLbl, badge);
 
                 Label detailLbl = new Label(p.getDiagnosis() + "   |   " + p.getDetails());
                 detailLbl.setFont(Font.font("Arial", 12));
-                detailLbl.setTextFill(Color.web(C_TEXT_MED));
+                detailLbl.setTextFill(Color.web(AppTheme.C_TEXT_MED));
 
-                Label idLbl = new Label("ID: " + p.getId());
+                Label idLbl = new Label("ID: " + p.getPatientId());
                 idLbl.setFont(Font.font("Arial", 11));
-                idLbl.setTextFill(Color.web(C_TEXT_LIGHT));
+                idLbl.setTextFill(Color.web(AppTheme.C_TEXT_LIGHT));
 
                 info.getChildren().addAll(nameRow, detailLbl, idLbl);
                 HBox.setHgrow(info, Priority.ALWAYS);
 
-                row.getChildren().addAll(stripe, avatarCircle, info);
+                Button editBtn = new Button("Edit");
+                editBtn.setStyle(
+                    "-fx-background-color: #2B7FD4;" +
+                    "-fx-text-fill: white;" +
+                    "-fx-background-radius: 10;" +
+                    "-fx-cursor: hand;"
+                );
+                editBtn.setOnAction(e -> {
+                    idField.setText(p.getPatientId());
+                    nameField.setText(p.getName());
+                    diagnosisField.setText(p.getDiagnosis());
+                    extraField.setText(p.getDetails());
 
+                    if (p.getType().equals("BED")) {
+                        bedBtn.setSelected(true);
+                    } else {
+                        apptBtn.setSelected(true);
+                    }
+
+                    editingMode = true;
+                    editingPatientId = p.getId();
+                    addBtn.setText("Update Patient");
+                });
+
+                Button deleteBtn = new Button("Delete");
+                deleteBtn.setStyle("-fx-background-color: #ff4d4d;" +"-fx-text-fill: white;" + "-fx-background-radius: 10;" +
+                    "-fx-cursor: hand;"
+                );
+                deleteBtn.setOnAction(e -> {
+            Alert confirm = new Alert( Alert.AlertType.CONFIRMATION );
+
+            confirm.setTitle("Delete Patient");
+
+            confirm.setHeaderText(null);
+
+            confirm.setContentText("Delete this patient?");
+
+            confirm.showAndWait().ifPresent(response -> {
+                        if (response ==
+                                ButtonType.OK) {
+
+                            boolean success =ApiService.deletePatient(p.getId());
+
+                            if (success) {
+
+                                loadPatientsFromDatabase();
+
+                            } else {
+
+                                Alert error =
+                                        new Alert(
+                                                Alert.AlertType.ERROR
+                                        );
+
+                                error.setContentText(
+                                        "Delete failed!"
+                                );
+
+                                error.showAndWait();
+                            }
+                        }
+                    });
+        });
+
+                HBox actions = new HBox(8, editBtn, deleteBtn);
+
+                row.getChildren().addAll(stripe, avatar, info, actions);
                 setGraphic(row);
                 setPadding(new Insets(3, 2, 3, 2));
             }
@@ -607,58 +681,44 @@ public class Main extends Application {
         VBox box = new VBox(10);
         box.setPadding(new Insets(22));
         box.setStyle(
-            "-fx-background-color: " + C_WHITE + ";" +
+            "-fx-background-color: " + AppTheme.C_WHITE + ";" +
             "-fx-background-radius: 16;" +
-            "-fx-border-color: " + C_BORDER + ";" +
+            "-fx-border-color: " + AppTheme.C_BORDER + ";" +
             "-fx-border-radius: 16;" +
             "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.07), 12, 0, 0, 3);"
         );
         return box;
     }
 
-    /**
-     * Stat card: left coloured accent bar, then icon circle + number + label.
-     * Uses a plain letter (P/B/A) instead of emoji for cross-platform safety.
-     */
-    private HBox statCard(String title, Label value, String accent, String bg, String iconLetter) {
-
+    private HBox statCard(String title, Label value,
+                          String accent, String bg, String letter) {
         HBox card = new HBox(0);
         card.setStyle(
-            "-fx-background-color: " + C_WHITE + ";" +
+            "-fx-background-color: " + AppTheme.C_WHITE + ";" +
             "-fx-background-radius: 14;" +
-            "-fx-border-color: " + C_BORDER + ";" +
+            "-fx-border-color: " + AppTheme.C_BORDER + ";" +
             "-fx-border-radius: 14;" +
             "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.07), 12, 0, 0, 3);"
         );
         HBox.setHgrow(card, Priority.ALWAYS);
 
-        // Accent bar (left side)
-        Region accentBar = new Region();
-        accentBar.setPrefWidth(5);
-        accentBar.setMinWidth(5);
-        accentBar.setStyle(
-            "-fx-background-color: " + accent + ";" +
-            "-fx-background-radius: 14 0 0 14;"
-        );
+        Region bar = new Region();
+        bar.setPrefWidth(5); bar.setMinWidth(5);
+        bar.setStyle("-fx-background-color: " + accent + "; -fx-background-radius: 14 0 0 14;");
 
-        // Icon circle
-        StackPane iconCircle = new StackPane();
-        iconCircle.setPrefSize(44, 44);
-        iconCircle.setMinSize(44, 44);
-        iconCircle.setStyle(
+        StackPane ic = new StackPane();
+        ic.setPrefSize(44, 44); ic.setMinSize(44, 44);
+        ic.setStyle(
             "-fx-background-color: " + bg + ";" +
             "-fx-background-radius: 22;" +
-            "-fx-border-color: " + accent + ";" +
-            "-fx-border-radius: 22;" +
-            "-fx-border-width: 1.5;"
+            "-fx-border-color: " + accent + "; -fx-border-radius: 22; -fx-border-width: 1.5;"
         );
-        Label iconLbl = new Label(iconLetter);
-        iconLbl.setFont(Font.font("Georgia", FontWeight.BOLD, 16));
-        iconLbl.setTextFill(Color.web(accent));
-        iconCircle.getChildren().add(iconLbl);
+        Label icLbl = new Label(letter);
+        icLbl.setFont(Font.font("Georgia", FontWeight.BOLD, 16));
+        icLbl.setTextFill(Color.web(accent));
+        ic.getChildren().add(icLbl);
 
-        // Text
-        VBox content = new VBox(4);
+        VBox content = new VBox(3);
         content.setPadding(new Insets(14, 16, 14, 14));
         content.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(content, Priority.ALWAYS);
@@ -668,11 +728,10 @@ public class Main extends Application {
 
         Label titleLbl = new Label(title);
         titleLbl.setFont(Font.font("Arial", 12));
-        titleLbl.setTextFill(Color.web(C_TEXT_LIGHT));
+        titleLbl.setTextFill(Color.web(AppTheme.C_TEXT_LIGHT));
 
-        content.getChildren().addAll(iconCircle, value, titleLbl);
-        card.getChildren().addAll(accentBar, content);
-
+        content.getChildren().addAll(ic, value, titleLbl);
+        card.getChildren().addAll(bar, content);
         return card;
     }
 
@@ -681,21 +740,21 @@ public class Main extends Application {
         tf.setPromptText(prompt);
         tf.setPrefHeight(40);
         tf.setStyle(
-            "-fx-background-color: " + C_PAGE_BG + ";" +
+            "-fx-background-color: " + AppTheme.C_PAGE_BG + ";" +
             "-fx-background-radius: 8;" +
-            "-fx-border-color: " + C_BORDER + ";" +
+            "-fx-border-color: " + AppTheme.C_BORDER + ";" +
             "-fx-border-radius: 8;" +
             "-fx-font-size: 13px;" +
-            "-fx-text-fill: " + C_TEXT_DARK + ";"
+            "-fx-text-fill: " + AppTheme.C_TEXT_DARK + ";"
         );
         tf.focusedProperty().addListener((obs, old, focused) ->
             tf.setStyle(
-                "-fx-background-color: " + C_WHITE + ";" +
+                "-fx-background-color: " + AppTheme.C_WHITE + ";" +
                 "-fx-background-radius: 8;" +
-                "-fx-border-color: " + (focused ? C_BLUE : C_BORDER) + ";" +
+                "-fx-border-color: " + (focused ? AppTheme.C_TEAL : AppTheme.C_BORDER) + ";" +
                 "-fx-border-radius: 8;" +
                 "-fx-font-size: 13px;" +
-                "-fx-text-fill: " + C_TEXT_DARK + ";"
+                "-fx-text-fill: " + AppTheme.C_TEXT_DARK + ";"
             )
         );
         return tf;
@@ -706,42 +765,26 @@ public class Main extends Application {
         btn.setToggleGroup(group);
         btn.setSelected(selected);
         btn.setPrefHeight(36);
-
-        String activeStyle =
-            "-fx-background-color: " + C_BLUE + ";" +
-            "-fx-text-fill: white;" +
-            "-fx-background-radius: 8;" +
-            "-fx-font-size: 12px;" +
-            "-fx-font-weight: bold;";
-
-        String inactiveStyle =
-            "-fx-background-color: " + C_PAGE_BG + ";" +
-            "-fx-text-fill: " + C_TEXT_MED + ";" +
-            "-fx-border-color: " + C_BORDER + ";" +
-            "-fx-background-radius: 8;" +
-            "-fx-border-radius: 8;" +
-            "-fx-font-size: 12px;";
-
-        btn.setStyle(selected ? activeStyle : inactiveStyle);
-        btn.selectedProperty().addListener((obs, old, nw) -> btn.setStyle(nw ? activeStyle : inactiveStyle));
+        String on  = "-fx-background-color: " + AppTheme.C_BLUE + "; -fx-text-fill: white;" +
+                     "-fx-background-radius: 8; -fx-font-size: 12px; -fx-font-weight: bold;";
+        String off = "-fx-background-color: " + AppTheme.C_PAGE_BG + "; -fx-text-fill: " + AppTheme.C_TEXT_MED + ";" +
+                     "-fx-border-color: " + AppTheme.C_BORDER + "; -fx-background-radius: 8;" +
+                     "-fx-border-radius: 8; -fx-font-size: 12px;";
+        btn.setStyle(selected ? on : off);
+        btn.selectedProperty().addListener((obs, old, nw) -> btn.setStyle(nw ? on : off));
         return btn;
     }
 
     private Button primaryButton(String text) {
         Button btn = new Button("+ " + text);
-        btn.setPrefHeight(44);
-        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setPrefHeight(44); btn.setMaxWidth(Double.MAX_VALUE);
         btn.setFont(Font.font("Arial", FontWeight.BOLD, 13));
-        String base =
-            "-fx-background-color: " + C_BLUE + ";" +
-            "-fx-text-fill: white;" +
-            "-fx-background-radius: 10;" +
-            "-fx-effect: dropshadow(gaussian, rgba(43,127,212,0.30), 8, 0, 0, 3);";
-        String hover =
-            "-fx-background-color: " + C_BLUE_DARK + ";" +
-            "-fx-text-fill: white;" +
-            "-fx-background-radius: 10;" +
-            "-fx-effect: dropshadow(gaussian, rgba(43,127,212,0.45), 10, 0, 0, 4);";
+        String base  = "-fx-background-color: " + AppTheme.C_BLUE  + "; -fx-text-fill: white;" +
+                       "-fx-background-radius: 10;" +
+                       "-fx-effect: dropshadow(gaussian,rgba(43,127,212,0.30),8,0,0,3);";
+        String hover = "-fx-background-color: " + AppTheme.C_BLUE_DARK + "; -fx-text-fill: white;" +
+                       "-fx-background-radius: 10;" +
+                       "-fx-effect: dropshadow(gaussian,rgba(43,127,212,0.45),10,0,0,4);";
         btn.setStyle(base);
         btn.setOnMouseEntered(e -> btn.setStyle(hover));
         btn.setOnMouseExited(e  -> btn.setStyle(base));
@@ -750,21 +793,14 @@ public class Main extends Application {
 
     private Button dangerButton(String text) {
         Button btn = new Button("x  " + text);
-        btn.setPrefHeight(40);
-        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setPrefHeight(40); btn.setMaxWidth(Double.MAX_VALUE);
         btn.setFont(Font.font("Arial", 12));
-        String base =
-            "-fx-background-color: " + C_WHITE + ";" +
-            "-fx-text-fill: " + C_RED + ";" +
-            "-fx-border-color: " + C_BORDER + ";" +
-            "-fx-background-radius: 10;" +
-            "-fx-border-radius: 10;";
-        String hover =
-            "-fx-background-color: " + C_RED_LIGHT + ";" +
-            "-fx-text-fill: " + C_RED + ";" +
-            "-fx-border-color: " + C_RED + ";" +
-            "-fx-background-radius: 10;" +
-            "-fx-border-radius: 10;";
+        String base  = "-fx-background-color: " + AppTheme.C_WHITE + "; -fx-text-fill: " + AppTheme.C_RED + ";" +
+                       "-fx-border-color: " + AppTheme.C_BORDER + "; -fx-background-radius: 10;" +
+                       "-fx-border-radius: 10;";
+        String hover = "-fx-background-color: " + AppTheme.C_RED_LIGHT + "; -fx-text-fill: " + AppTheme.C_RED + ";" +
+                       "-fx-border-color: " + AppTheme.C_RED + "; -fx-background-radius: 10;" +
+                       "-fx-border-radius: 10;";
         btn.setStyle(base);
         btn.setOnMouseEntered(e -> btn.setStyle(hover));
         btn.setOnMouseExited(e  -> btn.setStyle(base));
@@ -774,23 +810,22 @@ public class Main extends Application {
     private Label sectionLabel(String text) {
         Label lbl = new Label(text);
         lbl.setFont(Font.font("Arial", FontWeight.BOLD, 10));
-        lbl.setTextFill(Color.web(C_TEXT_LIGHT));
+        lbl.setTextFill(Color.web(AppTheme.C_TEXT_LIGHT));
         lbl.setPadding(new Insets(6, 0, 0, 0));
         return lbl;
     }
 
     private Region thinDivider() {
         Region r = new Region();
-        r.setPrefHeight(1);
-        r.setMaxHeight(1);
-        r.setStyle("-fx-background-color: " + C_BORDER + ";");
+        r.setPrefHeight(1); r.setMaxHeight(1);
+        r.setStyle("-fx-background-color: " + AppTheme.C_BORDER + ";");
         VBox.setMargin(r, new Insets(6, 0, 2, 0));
         return r;
     }
 
     private void showInlineStatus(Label lbl, String msg, boolean success) {
         lbl.setText((success ? "✓  " : "!  ") + msg);
-        lbl.setTextFill(Color.web(success ? C_GREEN : C_RED));
+        lbl.setTextFill(Color.web(success ? AppTheme.C_GREEN : AppTheme.C_RED));
         FadeTransition ft = new FadeTransition(Duration.millis(250), lbl);
         ft.setFromValue(0); ft.setToValue(1); ft.play();
     }
@@ -808,5 +843,5 @@ public class Main extends Application {
         tt.setByX(7); tt.setAutoReverse(true); tt.setCycleCount(4); tt.play();
     }
 
-    public static void main(String[] args) { launch(); }
+    public static void main(String[] args) { launch(args); }
 }
