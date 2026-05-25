@@ -62,6 +62,7 @@ public class Main extends Application {
     Button addBtn;
 
     private StackPane contentArea;
+    private PatientsView patientsView;
 
     @Override
     public void start(Stage stage) {
@@ -70,6 +71,7 @@ public class Main extends Application {
 
         contentArea = new StackPane();
         contentArea.getChildren().add(buildBody());
+        patientsView = createPatientsView();
         loadPatientsFromDatabase();
         VBox.setVgrow(contentArea, Priority.ALWAYS);
 
@@ -115,10 +117,11 @@ public class Main extends Application {
         navDashboard.setOnMouseClicked(e -> {
             setActiveNav(navDashboard, navPatients, navReports);
             contentArea.getChildren().setAll(buildBody());
+            loadPatientsFromDatabase();
         });
         navPatients.setOnMouseClicked(e -> {
             setActiveNav(navPatients, navDashboard, navReports);
-            contentArea.getChildren().setAll(PatientsView.getView());
+            contentArea.getChildren().setAll(patientsView);
         });
         navReports.setOnMouseClicked(e -> {
             setActiveNav(navReports, navDashboard, navPatients);
@@ -214,6 +217,70 @@ public class Main extends Application {
                              "-fx-background-radius: 20; -fx-cursor: hand;");
         });
         return lbl;
+    }
+
+    private PatientsView createPatientsView() {
+        return new PatientsView(
+                patientList,
+                filteredPatients,
+                this::loadPatientsFromDatabase,
+                new PatientsView.PatientActionHandler() {
+                    @Override
+                    public void onEdit(PatientDTO patient) {
+                        contentArea.getChildren().setAll(buildBody());
+                        loadPatientsFromDatabase();
+
+                        idField.setText(patient.getPatientId());
+                        nameField.setText(patient.getName());
+                        diagnosisField.setText(patient.getDiagnosis());
+                        extraField.setText(patient.getDetails());
+
+                        if (patient.getType().equals("BED")) {
+                            bedBtn.setSelected(true);
+                        } else {
+                            apptBtn.setSelected(true);
+                        }
+
+                        editingMode = true;
+                        editingPatientId = patient.getId();
+                        addBtn.setText("Update Patient");
+                    }
+
+                    @Override
+                    public void onDelete(PatientDTO patient) {
+                        Alert confirm =
+                                new Alert(Alert.AlertType.CONFIRMATION);
+
+                        confirm.setTitle("Delete Patient");
+                        confirm.setHeaderText(null);
+                        confirm.setContentText("Delete this patient?");
+
+                        confirm.showAndWait()
+                                .ifPresent(response -> {
+                                    if (response == ButtonType.OK) {
+                                        boolean success =
+                                                ApiService.deletePatient(
+                                                        patient.getId()
+                                                );
+
+                                        if (success) {
+                                            loadPatientsFromDatabase();
+                                        } else {
+                                            Alert error =
+                                                    new Alert(
+                                                            Alert.AlertType.ERROR
+                                                    );
+
+                                            error.setContentText(
+                                                    "Delete failed!"
+                                            );
+                                            error.showAndWait();
+                                        }
+                                    }
+                                });
+                    }
+                }
+        );
     }
 
     // ===================== BODY =====================
@@ -491,7 +558,7 @@ public class Main extends Application {
             "-fx-font-size: 14;" +
             "-fx-background-color: #F3F6FA;" +
             "-fx-border-color: #D6DFEA;" +
-            "-fx-text-fill: 1E293B;" +
+            "-fx-text-fill: #1E293B;" +
             "-fx-prompt-text-fill: #94A3B8;"
         );
         searchField.textProperty().addListener((obs, oldValue, newValue) -> {

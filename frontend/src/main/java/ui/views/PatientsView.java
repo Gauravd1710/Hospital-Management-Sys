@@ -1,79 +1,204 @@
 package ui.views;
 
-import javafx.geometry.Pos;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
+import javafx.geometry.Insets;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
-import javafx.scene.paint.CycleMethod;
-import javafx.scene.paint.LinearGradient;
-import javafx.scene.paint.Stop;
-import javafx.scene.shape.Rectangle;
-import javafx.scene.text.Font;
-import javafx.scene.text.FontWeight;
+import model.PatientDTO;
 
-public class PatientsView {
+public class PatientsView extends BorderPane {
 
-    private static final String C_PAGE_BG    = "#F0F4F8";
-    private static final String C_TEAL       = "#0F9D8A";
-    private static final String C_TEAL_DARK  = "#0A7A6B";
-    private static final String C_TEXT_DARK  = "#1A2332";
-    private static final String C_TEXT_LIGHT = "#718096";
+    public PatientsView(
+            ObservableList<PatientDTO> patientList,
+            FilteredList<PatientDTO> filteredPatients,
+            Runnable refreshAction,
+            PatientActionHandler handler
+    ) {
 
-    public static StackPane getView() {
+        setPadding(new Insets(20));
 
-        VBox content = new VBox(14);
-        content.setAlignment(Pos.CENTER);
-        content.setMaxWidth(460);
+        Label title
+                = new Label("Patient Management");
 
-        StackPane logoMark = new StackPane();
-        logoMark.setPrefSize(72, 72);
-        logoMark.setMaxSize(72, 72);
+        title.setStyle(
+        "-fx-font-size: 24;"
+        + "-fx-font-weight: bold;"
+        + "-fx-text-fill: #1E293B;"
+);
 
-        Rectangle bg = new Rectangle(72, 72);
-        bg.setArcWidth(20); bg.setArcHeight(20);
-        bg.setFill(new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
-            new Stop(0, Color.web("#1BC9B2")),
-            new Stop(1, Color.web(C_TEAL_DARK))
-        ));
+        TableView<PatientDTO> table
+                = new TableView<>();
 
-        // Person silhouette using stacked rectangles: head circle + body rect
-        StackPane personIcon = new StackPane();
+        table.setItems(filteredPatients);
 
-        Rectangle head = new Rectangle(20, 20);
-        head.setArcWidth(20); head.setArcHeight(20);
-        head.setFill(Color.WHITE);
-        head.setTranslateY(-14);
+        table.setColumnResizePolicy(
+                TableView.CONSTRAINED_RESIZE_POLICY
+        );
 
-        Rectangle body = new Rectangle(28, 18);
-        body.setArcWidth(14); body.setArcHeight(14);
-        body.setFill(Color.WHITE);
-        body.setTranslateY(10);
+        table.setStyle(
+        "-fx-background-color: white;"
+        + "-fx-control-inner-background: white;"
+        + "-fx-table-cell-border-color: #E2E8F0;"
+        + "-fx-text-background-color: #0F172A;"
+        + "-fx-selection-bar: #DBEAFE;"
+        + "-fx-selection-bar-text: black;"
+        );
+        table.lookupAll(".column-header").forEach(header ->
+        header.setStyle(
+                "-fx-background-color: #1E293B;"
+                + "-fx-text-fill: white;"
+        )
+);
 
-        personIcon.getChildren().addAll(head, body);
-        logoMark.getChildren().addAll(bg, personIcon);
+        TableColumn<PatientDTO, String> idCol
+                = new TableColumn<>("Patient ID");
 
-        Label title = new Label("Patients Management");
-        title.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
-        title.setTextFill(Color.web(C_TEXT_DARK));
+        idCol.setCellValueFactory(data
+                -> new SimpleStringProperty(
+                        data.getValue().getPatientId()
+                )
+        );
 
-        Region pill = new Region();
-        pill.setPrefSize(48, 4);
-        pill.setMaxWidth(48);
-        pill.setStyle("-fx-background-color: " + C_TEAL + "; -fx-background-radius: 2;");
+        TableColumn<PatientDTO, String> nameCol
+                = new TableColumn<>("Name");
 
-        Label sub = new Label("Patient management features will be available here.");
-        sub.setFont(Font.font("Arial", 13));
-        sub.setTextFill(Color.web(C_TEXT_LIGHT));
-        sub.setWrapText(true);
-        sub.setAlignment(Pos.CENTER);
+        nameCol.setCellValueFactory(data
+                -> new SimpleStringProperty(
+                        data.getValue().getName()
+                )
+        );
 
-        content.getChildren().addAll(logoMark, title, pill, sub);
+        TableColumn<PatientDTO, String> diagnosisCol
+                = new TableColumn<>("Diagnosis");
 
-        StackPane pane = new StackPane(content);
-        pane.setAlignment(Pos.CENTER);
-        pane.setStyle("-fx-background-color: " + C_PAGE_BG + ";");
-        return pane;
+        diagnosisCol.setCellValueFactory(data
+                -> new SimpleStringProperty(
+                        data.getValue().getDiagnosis()
+                )
+        );
+
+        TableColumn<PatientDTO, String> typeCol
+                = new TableColumn<>("Type");
+
+        typeCol.setCellValueFactory(data
+                -> new SimpleStringProperty(
+                        data.getValue().getType()
+                )
+        );
+
+        TableColumn<PatientDTO, String> detailsCol
+                = new TableColumn<>("Details");
+
+        detailsCol.setCellValueFactory(data
+                -> new SimpleStringProperty(
+                        data.getValue().getDetails()
+                )
+        );
+
+        TableColumn<PatientDTO, Void> actionCol
+                = new TableColumn<>("Actions");
+
+        actionCol.setCellFactory(param
+                -> new TableCell<>() {
+
+            private final Button editBtn
+                    = new Button("Edit");
+
+            private final Button deleteBtn
+                    = new Button("Delete");
+
+            private final HBox pane
+                    = new HBox(8, editBtn, deleteBtn);
+
+            {
+
+                editBtn.setStyle(
+                "-fx-background-color: #3B82F6;"
+                + "-fx-text-fill: white;"
+                + "-fx-background-radius: 6;"
+                + "-fx-cursor: hand;"
+        );
+
+        deleteBtn.setStyle(
+                "-fx-background-color: #EF4444;"
+                + "-fx-text-fill: white;"
+                + "-fx-background-radius: 6;"
+                + "-fx-cursor: hand;"
+        );
+
+                editBtn.setOnAction(event -> {
+
+                    PatientDTO patient
+                            = getTableView()
+                                    .getItems()
+                                    .get(getIndex());
+
+                    handler.onEdit(patient);
+                });
+
+                deleteBtn.setOnAction(event -> {
+
+                    PatientDTO patient
+                            = getTableView()
+                                    .getItems()
+                                    .get(getIndex());
+
+                    handler.onDelete(patient);
+                });
+            }
+
+            @Override
+            protected void updateItem(
+                    Void item,
+                    boolean empty
+            ) {
+
+                super.updateItem(item, empty);
+
+                if (empty) {
+
+                    setGraphic(null);
+
+                } else {
+
+                    setGraphic(pane);
+                }
+            }
+        });
+
+        table.getColumns().addAll(
+                idCol,
+                nameCol,
+                diagnosisCol,
+                typeCol,
+                detailsCol,
+                actionCol
+        );
+
+        VBox layout
+                = new VBox(20, title, table);
+
+        VBox.setVgrow(
+                table,
+                Priority.ALWAYS
+        );
+
+        setCenter(layout);
+    }
+
+    public interface PatientActionHandler {
+
+        void onEdit(PatientDTO patient);
+
+        void onDelete(PatientDTO patient);
     }
 }

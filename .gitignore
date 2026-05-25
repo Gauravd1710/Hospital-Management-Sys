@@ -22,3 +22,8 @@ Thumbs.db
 # Build directories
 out/
 build/
+
+# Packaged frontend artifacts
+frontend/deploy/
+frontend/output/
+frontend/META-INF/

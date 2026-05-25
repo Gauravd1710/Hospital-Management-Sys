@@ -12,70 +12,58 @@ import javafx.scene.paint.Stop;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import ui.AppTheme;
 
 public class ReportsView {
 
-    private static final String C_PAGE_BG    = "#F0F4F8";
-    private static final String C_GREEN      = "#1DB87A";
-    private static final String C_GREEN_DARK = "#158A5B";
-    private static final String C_TEXT_DARK  = "#1A2332";
-    private static final String C_TEXT_LIGHT = "#718096";
-
     public static StackPane getView() {
 
-        VBox content = new VBox(14);
+        VBox content = new VBox(18);
         content.setAlignment(Pos.CENTER);
-        content.setMaxWidth(460);
+        content.setMaxWidth(500);
 
-        StackPane logoMark = new StackPane();
-        logoMark.setPrefSize(72, 72);
-        logoMark.setMaxSize(72, 72);
+        // Icon mark: green gradient + bar chart bars
+        StackPane mark = new StackPane();
+        mark.setPrefSize(72, 72); mark.setMaxSize(72, 72);
 
         Rectangle bg = new Rectangle(72, 72);
-        bg.setArcWidth(20); bg.setArcHeight(20);
+        bg.setArcWidth(22); bg.setArcHeight(22);
         bg.setFill(new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
             new Stop(0, Color.web("#2ED48A")),
-            new Stop(1, Color.web(C_GREEN_DARK))
+            new Stop(1, Color.web("#158A5B"))
         ));
 
-        // Bar chart icon: three rectangles of different heights
-        Rectangle bar1 = new Rectangle(8, 14);
-        bar1.setArcWidth(3); bar1.setArcHeight(3);
-        bar1.setFill(Color.WHITE);
-        bar1.setTranslateX(-12); bar1.setTranslateY(6);
+        Rectangle b1 = new Rectangle(10, 16);
+        b1.setArcWidth(4); b1.setArcHeight(4);
+        b1.setFill(Color.WHITE); b1.setTranslateX(-16); b1.setTranslateY(6);
 
-        Rectangle bar2 = new Rectangle(8, 24);
-        bar2.setArcWidth(3); bar2.setArcHeight(3);
-        bar2.setFill(Color.WHITE);
-        bar2.setTranslateY(1);
+        Rectangle b2 = new Rectangle(10, 28);
+        b2.setArcWidth(4); b2.setArcHeight(4);
+        b2.setFill(Color.WHITE); b2.setTranslateY(0);
 
-        Rectangle bar3 = new Rectangle(8, 18);
-        bar3.setArcWidth(3); bar3.setArcHeight(3);
-        bar3.setFill(Color.WHITE);
-        bar3.setTranslateX(12); bar3.setTranslateY(4);
+        Rectangle b3 = new Rectangle(10, 20);
+        b3.setArcWidth(4); b3.setArcHeight(4);
+        b3.setFill(Color.WHITE); b3.setTranslateX(16); b3.setTranslateY(4);
 
-        logoMark.getChildren().addAll(bg, bar1, bar2, bar3);
+        mark.getChildren().addAll(bg, b1, b2, b3);
+
+        Region divider = new Region();
+        divider.setPrefSize(60, 3); divider.setMaxWidth(60);
+        divider.setStyle("-fx-background-color: " + AppTheme.C_GREEN + "; -fx-background-radius: 2;");
 
         Label title = new Label("Reports & Analytics");
-        title.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
-        title.setTextFill(Color.web(C_TEXT_DARK));
+        title.setFont(Font.font("Georgia", FontWeight.BOLD, 28));
+        title.setTextFill(Color.web(AppTheme.C_TEXT_DARK));
 
-        Region pill = new Region();
-        pill.setPrefSize(48, 4);
-        pill.setMaxWidth(48);
-        pill.setStyle("-fx-background-color: " + C_GREEN + "; -fx-background-radius: 2;");
+        Label sub = new Label("Reporting and analytics features coming soon.");
+        sub.setFont(Font.font("Arial", 14));
+        sub.setTextFill(Color.web(AppTheme.C_TEXT_LIGHT));
 
-        Label sub = new Label("Reporting and analytics features will be available here.");
-        sub.setFont(Font.font("Arial", 13));
-        sub.setTextFill(Color.web(C_TEXT_LIGHT));
-        sub.setWrapText(true);
-        sub.setAlignment(Pos.CENTER);
-
-        content.getChildren().addAll(logoMark, title, pill, sub);
+        content.getChildren().addAll(mark, title, divider, sub);
 
         StackPane pane = new StackPane(content);
         pane.setAlignment(Pos.CENTER);
-        pane.setStyle("-fx-background-color: " + C_PAGE_BG + ";");
+        pane.setStyle("-fx-background-color: " + AppTheme.C_PAGE_BG + ";");
         return pane;
     }
 }
