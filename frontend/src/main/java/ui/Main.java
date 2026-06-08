@@ -485,7 +485,8 @@ public class Main extends Application {
                 alert.setTitle("Error");
                 alert.setHeaderText(null);
                 alert.setContentText(
-                        "Failed to save patient!");
+                        "Failed to save patient!"
+                                + apiErrorDetails());
 
                 alert.showAndWait();
             }
@@ -895,6 +896,16 @@ public class Main extends Application {
         lbl.setTextFill(Color.web(success ? AppTheme.C_GREEN : AppTheme.C_RED));
         FadeTransition ft = new FadeTransition(Duration.millis(250), lbl);
         ft.setFromValue(0); ft.setToValue(1); ft.play();
+    }
+
+    private String apiErrorDetails() {
+        String lastError = ApiService.getLastError();
+
+        if (lastError == null || lastError.isBlank()) {
+            return "";
+        }
+
+        return "\n\n" + lastError;
     }
 
     private void pulseButton(Button btn) {

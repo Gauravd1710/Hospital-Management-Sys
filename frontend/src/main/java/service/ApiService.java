@@ -5,8 +5,11 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -18,48 +21,45 @@ import model.PatientDTO;
 public class ApiService {
 
     private static final String API_URL
-            = "http://localhost:8080/patients";
+            = System.getProperty(
+                    "hospital.api.url",
+                    System.getenv().getOrDefault(
+                            "HOSPITAL_API_URL",
+                            "https://hospital-backend1-2dav.onrender.com/patients"
+                    )
+            );
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private static String lastError = "";
+
+    public static String getLastError() {
+        return lastError;
+    }
 
     public static boolean savePatient(PatientDTO patient) {
 
         try {
+            lastError = "";
 
             URL url = new URL(API_URL);
 
             HttpURLConnection conn
                     = (HttpURLConnection) url.openConnection();
 
-            conn.setRequestMethod("POST");
+            configureJsonConnection(conn);
 
-            conn.setRequestProperty(
-                    "Content-Type",
-                    "application/json"
-            );
+            conn.setRequestMethod("POST");
 
             conn.setDoOutput(true);
 
-            String json = String.format(
-                    """
-                    {
-                        "patientId":"%s",
-                        "name":"%s",
-                        "diagnosis":"%s",
-                        "type":"%s",
-                        "details":"%s"
-                    }
-                    """,
-                    patient.getPatientId(),
-                    patient.getName(),
-                    patient.getDiagnosis(),
-                    patient.getType(),
-                    patient.getDetails()
+            String json = MAPPER.writeValueAsString(
+                    patientPayload(patient)
             );
-
-            System.out.println(json);
 
             OutputStream os = conn.getOutputStream();
 
-            os.write(json.getBytes());
+            os.write(json.getBytes(StandardCharsets.UTF_8));
 
             os.flush();
             os.close();
@@ -68,12 +68,18 @@ public class ApiService {
 
             System.out.println("Response Code: " + responseCode);
 
+            if (!isSuccess(responseCode)) {
+                lastError = readResponseBody(conn);
+            }
+
             return responseCode == 200
                     || responseCode == 201;
 
         } catch (Exception e) {
 
             e.printStackTrace();
+            lastError = e.getClass().getSimpleName()
+                    + ": " + e.getMessage();
 
             return false;
         }
@@ -84,18 +90,16 @@ public class ApiService {
         List<PatientDTO> patients = new ArrayList<>();
 
         try {
+            lastError = "";
 
             URL url = new URL(API_URL);
 
             HttpURLConnection conn
                     = (HttpURLConnection) url.openConnection();
 
-            conn.setRequestMethod("GET");
+            configureJsonConnection(conn);
 
-            conn.setRequestProperty(
-                    "Content-Type",
-                    "application/json"
-            );
+            conn.setRequestMethod("GET");
 
             int responseCode
                     = conn.getResponseCode();
@@ -152,11 +156,15 @@ public class ApiService {
 
                     patients.add(patient);
                 }
+            } else {
+                lastError = readResponseBody(conn);
             }
 
         } catch (Exception e) {
 
             e.printStackTrace();
+            lastError = e.getClass().getSimpleName()
+                    + ": " + e.getMessage();
         }
 
         return patients;
@@ -167,6 +175,7 @@ public class ApiService {
     ) {
 
         try {
+            lastError = "";
 
             URL url
                     = new URL(
@@ -175,6 +184,9 @@ public class ApiService {
 
             HttpURLConnection conn
                     = (HttpURLConnection) url.openConnection();
+
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(60000);
 
             conn.setRequestMethod("DELETE");
 
@@ -186,12 +198,18 @@ public class ApiService {
                     + responseCode
             );
 
+            if (!isSuccess(responseCode)) {
+                lastError = readResponseBody(conn);
+            }
+
             return responseCode == 200
                     || responseCode == 204;
 
         } catch (Exception e) {
 
             e.printStackTrace();
+            lastError = e.getClass().getSimpleName()
+                    + ": " + e.getMessage();
 
             return false;
         }
@@ -203,12 +221,12 @@ public class ApiService {
     ) {
 
         try {
-
-            ObjectMapper mapper =
-                    new ObjectMapper();
+            lastError = "";
 
             String json =
-                    mapper.writeValueAsString(patient);
+                    MAPPER.writeValueAsString(
+                            patientPayload(patient)
+                    );
 
             URL url =
                     new URL(
@@ -219,19 +237,16 @@ public class ApiService {
                     (HttpURLConnection)
                             url.openConnection();
 
-            conn.setRequestMethod("PUT");
+            configureJsonConnection(conn);
 
-            conn.setRequestProperty(
-                    "Content-Type",
-                    "application/json"
-            );
+            conn.setRequestMethod("PUT");
 
             conn.setDoOutput(true);
 
             OutputStream os =
                     conn.getOutputStream();
 
-            os.write(json.getBytes());
+            os.write(json.getBytes(StandardCharsets.UTF_8));
 
             os.flush();
             os.close();
@@ -244,13 +259,87 @@ public class ApiService {
                             + responseCode
             );
 
+            if (!isSuccess(responseCode)) {
+                lastError = readResponseBody(conn);
+            }
+
             return responseCode == 200;
 
         } catch (Exception e) {
 
             e.printStackTrace();
+            lastError = e.getClass().getSimpleName()
+                    + ": " + e.getMessage();
 
             return false;
+        }
+    }
+
+    private static void configureJsonConnection(
+            HttpURLConnection conn
+    ) {
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(60000);
+        conn.setRequestProperty(
+                "Content-Type",
+                "application/json; charset=UTF-8"
+        );
+        conn.setRequestProperty(
+                "Accept",
+                "application/json"
+        );
+    }
+
+    private static Map<String, String> patientPayload(
+            PatientDTO patient
+    ) {
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("patientId", patient.getPatientId());
+        payload.put("name", patient.getName());
+        payload.put("diagnosis", patient.getDiagnosis());
+        payload.put("type", patient.getType());
+        payload.put("details", patient.getDetails());
+        return payload;
+    }
+
+    private static boolean isSuccess(int responseCode) {
+        return responseCode >= 200
+                && responseCode < 300;
+    }
+
+    private static String readResponseBody(
+            HttpURLConnection conn
+    ) {
+        try {
+            BufferedReader br =
+                    new BufferedReader(
+                            new InputStreamReader(
+                                    conn.getErrorStream() != null
+                                            ? conn.getErrorStream()
+                                            : conn.getInputStream(),
+                                    StandardCharsets.UTF_8
+                            )
+                    );
+
+            StringBuilder response = new StringBuilder();
+            String line;
+
+            while ((line = br.readLine()) != null) {
+                response.append(line);
+            }
+
+            br.close();
+
+            if (response.isEmpty()) {
+                return "HTTP " + conn.getResponseCode();
+            }
+
+            return "HTTP " + conn.getResponseCode()
+                    + ": " + response;
+
+        } catch (Exception e) {
+            return e.getClass().getSimpleName()
+                    + ": " + e.getMessage();
         }
     }
 }
