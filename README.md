@@ -155,11 +155,10 @@ docker run -p 8080:8080 nexacare-backend
 
 ## Screenshots
 
-> Add screenshots to a `/screenshots` folder and update the paths below.
-
-| Dashboard | Patient Management |
+| Dashboard | Patient Management | Upcoming |
 |---|---|
 | ![Dashboard](screenshots/dashboard.png) | ![Patients](screenshots/patients.png) |
+| ![Upcoming](screenshots/upcoming.png) |
 
 ---
 
