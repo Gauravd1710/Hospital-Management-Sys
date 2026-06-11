@@ -155,11 +155,13 @@ docker run -p 8080:8080 nexacare-backend
 
 ## Screenshots
 
-| Dashboard | Patient Management | Upcoming |
-|---|---|
+| Dashboard | Patient Management |
+|-----------|-------------------|
 | ![Dashboard](screenshots/dashboard.png) | ![Patients](screenshots/patients.png) |
-| ![Upcoming](screenshots/upcoming.png) |
 
+| Upcoming |
+|----------------------|
+| ![Upcoming ](screenshots/upcoming.png) |
 ---
 
 ## Roadmap
